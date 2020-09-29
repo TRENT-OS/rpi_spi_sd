@@ -28,13 +28,11 @@ import <if_OS_Storage.camkes>;
     DECLARE_COMPONENT_BCM2837_SPI_HW(_type_ ## _hw) \
     \
     component _type_ { \
+        control;\
         dataport  Buf(BCM2837_SPI_REG_SIZE)  regBase; \
         \
         uses      if_OS_Timer                timeServer_rpc; \
         consumes    TimerReady           timeServer_notify; \
-        \
-        provides  if_OS_Storage              storage_rpc; \
-        dataport  Buf                        storage_port; \
     }
 
 

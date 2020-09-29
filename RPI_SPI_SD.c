@@ -31,6 +31,21 @@
 #define SPISD_ERR_ERASE_UNALIGNED  (_SPISD_ERR_BASE - 5)
 #define SPISD_ERR_BAD_CONFIG       (_SPISD_ERR_BASE - 6)i
 
+// Arbitrary test size of 10MiB to create more traffic
+#define TEST_DATA_LENGTH        (1024*1024*10)
+
+//------------------------------------------------------------------------------
+// Simply fill up the blocks with the same block sized pattern
+static const uint8_t testData[512] =
+    "537QNNHTI4PNJ207V9X4EQ6N7IT1S02EYBTUZOBDLL4IDSCDBJB6Y1QHX5JKIH6G"
+    "05G73K3SIIFJ0D601PDZUM2N58472UBW5SO4T6YU8X7ZFH0LABTXLJ9GFNTR0A8Q"
+    "AYTS13BDOOJM0M5J9PF51L3Z5M91SSJVFZI4TLJLXYHT5O9H3V3MK2W54I5FZQPA"
+    "0S946EET067EZ3ZX00A9489UBKIS2XX0N9107MY161DEKMWOVI803DPV8WLCK7CT"
+    "Z56Z3OXOSHQL1VKO3QE01MGJAIAREQBVISLQT76WZYO4QYFOI40EXWQA5LTBT239"
+    "Q3UKGBO36JG58QSUPFD1SX3AJWTUIB7IRC8GWBFQ519QLMW9QJRRYW53UWJ8QM7S"
+    "JT4R969S6545F3XUDEOZGUWMN2I1URKJWCKZFLQG6KFKW07LL37VJWTU5VWTWFRQ"
+    "5H1CD34ZRASMAQJM5X37ABVFE7GER2FG2EZ5186ZSX51JPIFLBRR5J3FPJD78THO";
+
 /**
  * @brief organizational data for spi led driver.
  */
@@ -41,14 +56,33 @@ static struct
     OS_Dataport_t  port_storage;
 } ctx =
 {
-    .port_storage  = OS_DATAPORT_ASSIGN(storage_port),
+    .port_storage  = {0},
     .init_ok       = false,
 };
+    //.port_storage  = OS_DATAPORT_ASSIGN(storage_port),
 
 static const if_OS_Timer_t timer =
     IF_OS_TIMER_ASSIGN(
         timeServer_rpc,
         timeServer_notify);
+
+//------------------------Private methods---------------------------------------
+static uint64_t
+get_time_nsec(
+    void)
+{
+    OS_Error_t err;
+    uint64_t nsec;
+
+    if ((err = TimeServer_getTime(&timer, TimeServer_PRECISION_NSEC,
+                                  &nsec)) != OS_SUCCESS)
+    {
+        Debug_LOG_ERROR("TimeServer_getTime() failed with %d", err);
+        nsec = 0;
+    }
+
+    return nsec;
+}
 
 static
 bool
@@ -520,4 +554,85 @@ storage_rpc_getState(
 
     *flags = disk_status();
     return OS_SUCCESS;
+}
+
+//------------------------------------------------------------------------------
+OS_Error_t
+test_read_largeBuffer_pos(void)
+{
+    int ret = 0;
+    int bytesRead = 0;
+    uint8_t block[disk_block_size()];
+    memset(block,0,disk_block_size());
+    
+    uint64_t timestamp = get_time_nsec();
+    while (bytesRead < TEST_DATA_LENGTH)
+    {
+        ret = disk_read(&(ctx.spi_sd_ctx),block,bytesRead%disk_block_size(),1);
+        if (ret != 0){
+            Debug_LOG_ERROR( "disk_read() failed");
+            return OS_ERROR_GENERIC;
+        }
+        bytesRead += disk_block_size();
+    }
+    uint64_t newTimestamp = get_time_nsec();
+    uint64_t delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
+
+    Debug_LOG_INFO("Successfully read large section of %zu bytes.", bytesRead);
+    
+    return (TEST_DATA_LENGTH == bytesRead) ? OS_SUCCESS : OS_ERROR_GENERIC;
+}
+
+
+//------------------------------------------------------------------------------
+OS_Error_t
+test_write_largeBuffer_pos(void)
+{
+    int ret = 0;
+    int bytesWritten = 0;
+    
+    uint64_t timestamp = get_time_nsec();
+    while (bytesWritten < TEST_DATA_LENGTH)
+    {
+        ret = disk_write(&(ctx.spi_sd_ctx),testData,bytesWritten%disk_block_size(),1);
+        if (ret != 0){
+            Debug_LOG_ERROR( "disk_write() failed");
+            return OS_ERROR_GENERIC;
+        }
+        bytesWritten += disk_block_size();
+    }
+    uint64_t newTimestamp = get_time_nsec();
+    uint64_t delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
+
+    Debug_LOG_INFO("Successfully write large section of %zu bytes.", bytesWritten);
+
+    return (TEST_DATA_LENGTH == bytesWritten) ? OS_SUCCESS : OS_ERROR_GENERIC;
+}
+
+int
+run(void)
+{
+    if (!ctx.init_ok)
+    {
+        Debug_LOG_ERROR("%s: initialization failed!", get_instance_name());
+        return -1;
+    }
+
+    Debug_LOG_INFO("Write test.");
+    test_write_largeBuffer_pos();
+
+    Debug_LOG_INFO("Read test.");
+    test_read_largeBuffer_pos();
+
+    Debug_LOG_INFO("%s: basic read/write test complete.", get_instance_name());
+
+    return 0;
 }
