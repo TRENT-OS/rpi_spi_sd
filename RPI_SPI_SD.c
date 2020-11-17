@@ -521,3 +521,23 @@ storage_rpc_getState(
     *flags = disk_status();
     return OS_SUCCESS;
 }
+
+//------------------------------------------------------------------------------
+// This is a CAmkES RPC interface handler. It's guaranteed that "size"
+// never points to NULL.
+OS_Error_t
+__attribute__((__nonnull__))
+storage_rpc_getBlockSize(
+    size_t *blockSize
+)
+{
+    if (!ctx.init_ok)
+    {
+        Debug_LOG_ERROR("initialization failed, fail call %s()", __func__);
+        return OS_ERROR_INVALID_STATE;
+    }
+
+    *blockSize = (size_t) disk_block_size();
+
+    return OS_SUCCESS;
+}
