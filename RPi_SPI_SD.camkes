@@ -1,0 +1,136 @@
+/*
+ * Copyright (C) 2020, Hensoldt Cyber GmbH
+ */
+
+/*
+ *  RPi_SPI_SD CAmkES Component
+ *
+ *  to be used as:
+ *
+ *      #include "RPi_SPI_SD/RPi_SPI_SD.camkes"
+ *
+ *      RPi_SPI_SD_COMPONENT_DEFINE(RPi_SPI_SD)
+ *      RPi_SPI_SD_HW_COMPONENT_DEFINE(RPi_SPI_SD_HW)
+ *
+ */
+
+#pragma once
+
+import <if_OS_Timer.camkes>;
+import <if_OS_Storage.camkes>;
+
+
+//------------------------------------------------------------------------------
+
+
+// NOTE: VideoCore has this at 0x7E200000
+#define RPi_SPI_SD_HW_BCM2837_DATAPORT_PADDR     0x3F200000
+#define RPi_SPI_SD_HW_BCM2837_DATAPORT_SIZE      0x8000
+
+
+//------------------------------------------------------------------------------
+
+
+/*
+ * Declare the RPi_SPI_SD HW component:
+ *
+ *      RPi_SPI_SD_HW_COMPONENT_DEFINE(
+ *          <name>
+ *      )
+ */
+#define RPi_SPI_SD_HW_COMPONENT_DEFINE( \
+    _name_) \
+    \
+    component _name_ { \
+        hardware; \
+        dataport  Buf(RPi_SPI_SD_HW_BCM2837_DATAPORT_SIZE)  regBase; \
+    }
+
+
+/*
+ * Declare the RPi_SPI_SD driver component:
+ *
+ *      RPi_SPI_SD_COMPONENT_DEFINE(
+ *          <name>
+ *      )
+ */
+#define RPi_SPI_SD_COMPONENT_DEFINE( \
+    _name_) \
+    \
+    component _name_ { \
+        dataport  Buf(RPi_SPI_SD_HW_BCM2837_DATAPORT_SIZE)  regBase; \
+        \
+        uses      if_OS_Timer                timeServer_rpc; \
+        consumes  TimerReady                 timeServer_notify; \
+        \
+        provides  if_OS_Storage              storage_rpc; \
+        dataport  Buf                        storage_port; \
+    }
+
+
+//------------------------------------------------------------------------------
+
+
+/*
+ * Connect a RPi_SPI_SD driver instance to the HW instance.
+ *
+ *      RPi_SPI_SD_INSTANCE_CONNECT(
+ *          <sd>,
+ *          <hw>,
+ *      )
+ */
+#define RPi_SPI_SD_INSTANCE_CONNECT( \
+    _inst_, \
+    _inst_hw_) \
+    \
+    connection seL4HardwareMMIO \
+        _inst_ ## _mmio( \
+            from _inst_.regBase, \
+            to   _inst_hw_.regBase \
+        );
+
+
+//------------------------------------------------------------------------------
+
+
+/*
+ * Assign client interface:
+ *
+ *      RPi_SPI_SD_INSTANCE_CONNECT_CLIENT(
+ *          <instance>,
+ *          <storage>.<rpc>, <storage>.<port>
+ *      )
+ */
+#define RPi_SPI_SD_INSTANCE_CONNECT_CLIENT( \
+    _inst_, \
+    _peer_inst_rpc_, \
+    _peer_inst_port_) \
+    \
+    connection  seL4RPCCall \
+        _inst_ ## _storage_rpc( \
+            from  _peer_inst_rpc_, \
+            to    _inst_.storage_rpc \
+        ); \
+    \
+    connection  seL4SharedData \
+        _inst_ ## _storage_port( \
+            from  _peer_inst_port_, \
+            to    _inst_.storage_port \
+        );
+
+
+//------------------------------------------------------------------------------
+
+
+/*
+ * Let RPi_SPI_SD configure itself:
+ *
+ *      RPi_SPI_SD_HW_INSTANCE_CONFIGURE_SELF(
+ *          <instance>
+ *      )
+ */
+#define RPi_SPI_SD_HW_INSTANCE_CONFIGURE_SELF( \
+    _inst_) \
+    \
+    _inst_.regBase_paddr  = RPi_SPI_SD_HW_BCM2837_DATAPORT_PADDR; \
+    _inst_.regBase_size   = RPi_SPI_SD_HW_BCM2837_DATAPORT_SIZE;
