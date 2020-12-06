@@ -41,7 +41,7 @@ function(RPi_SPI_SD_DeclareCAmkESComponent name)
             -Werror
         LIBS
             os_core_api
-            os_libs
+            lib_debug
             ${RPi_SPI_SD_LIBS}
     )
 

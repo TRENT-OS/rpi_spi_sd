@@ -4,7 +4,7 @@
  * @brief   SPI LED driver.
  */
 #include "OS_Error.h"
-#include "LibDebug/Debug.h"
+#include "lib_debug/Debug.h"
 #include "OS_Dataport.h"
 #include "TimeServer.h"
 
@@ -117,7 +117,7 @@ void post_init(void)
         .init_sck = BCM2837_SPI_CLOCK_DIVIDER_2048,
         // Note: The highest SPI clock rate is 20 MHz for MMC and 25 MHz for SD 
         // 250MHz / 16 = 15.625 MHz
-        .transfer_sck = BCM2837_SPI_CLOCK_DIVIDER_16,
+        .transfer_sck = BCM2837_SPI_CLOCK_DIVIDER_32,
         // Standard capacity cards have variable data block sizes, whereas High
         // Capacity cards fix the size of data block to 512 bytes. Therefore
         // just always use the Standard Capacity cards with a block size of 512 bytes.
@@ -210,7 +210,7 @@ storage_rpc_write(
         //read first block, adjust according bytes and write block back
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                 offset, offset, bytesWritten, bytesWritten, ret);
             return OS_ERROR_GENERIC;
         }
@@ -218,7 +218,7 @@ storage_rpc_write(
         memcpy(block + (offset - sector * disk_block_size()),buffer,nbr_of_bytes);
         ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                 offset, offset, bytesWritten, bytesWritten, ret);
             return OS_ERROR_GENERIC;
         }
@@ -233,7 +233,7 @@ storage_rpc_write(
             memcpy(block,buffer,disk_block_size());
             ret = disk_write(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                  offset, offset, bytesWritten, bytesWritten, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -247,14 +247,14 @@ storage_rpc_write(
             //read last block, adjust according bytes and write block back
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                  offset, offset, bytesWritten, bytesWritten, ret);
                 return OS_ERROR_GENERIC;
             }
             memcpy(block,buffer,size);
             ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                  offset, offset, bytesWritten, bytesWritten, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -327,7 +327,7 @@ storage_rpc_read(
         //read first block and copy according bytes to dataport
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                 offset, offset, bytesRead, bytesRead, ret);
             return OS_ERROR_GENERIC;
         }
@@ -342,7 +342,7 @@ storage_rpc_read(
         {
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                  offset, offset, bytesRead, bytesRead, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -356,7 +356,7 @@ storage_rpc_read(
             //read last block and copy according bytes into the dataport
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %d (0x%x), code %d",
                                  offset, offset, bytesRead, bytesRead, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -401,7 +401,7 @@ storage_rpc_erase(
         // the client did a bogus request, it knows the data port size and
         // never ask for more data
         Debug_LOG_ERROR(
-            "size %lld exceeds dataport size %zu",
+            "size %ld exceeds dataport size %zu",
             size,
             dataport_size );
 
@@ -499,7 +499,7 @@ storage_rpc_getSize(
     }
 
     *size = disk_capacity(&(ctx.spi_sd_ctx));
-
+    
     return OS_SUCCESS;
 }
 

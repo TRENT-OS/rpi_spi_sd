@@ -455,14 +455,14 @@ off_t _sd_sectors(spisd_t* spi) {
             blocknr = (c_size + 1) * mult;
             capacity = blocknr * block_len;
             blocks = capacity / BLOCK_SIZE;
-            printf("\n\rSDCard\n\rc_size: %d \n\rcapacity: %d \n\rsectors: %lld\n\r", c_size, capacity, blocks);
+            printf("\n\rSDCard\n\rc_size: %d \n\rcapacity: %d \n\rsectors: %ld\n\r", c_size, capacity, blocks);
             break;
 
         case 1:
             _cdv = 1;
             hc_c_size = ext_bits(csd, 69, 48);
             blocks = (hc_c_size+1)*1024;
-            printf("\n\rSDHC Card \n\rhc_c_size: %lld\n\rcapacity: %lld \n\rsectors: %lld\n\r", hc_c_size, blocks*BLOCK_SIZE, blocks);
+            printf("\n\rSDHC Card \n\rhc_c_size: %ld\n\rcapacity: %ld \n\rsectors: %ld\n\r", hc_c_size, blocks*BLOCK_SIZE, blocks);
             break;
 
         default:

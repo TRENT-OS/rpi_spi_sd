@@ -24,7 +24,7 @@ import <if_OS_Storage.camkes>;
 
 
 // NOTE: VideoCore has this at 0x7E200000
-#define RPi_SPI_SD_HW_BCM2837_DATAPORT_PADDR     0x3F200000
+#define RPi_SPI_SD_HW_BCM2837_DATAPORT_PADDR     0xFE200000
 #define RPi_SPI_SD_HW_BCM2837_DATAPORT_SIZE      0x8000
 
 
