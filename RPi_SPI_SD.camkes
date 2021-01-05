@@ -23,6 +23,7 @@ import <if_OS_Storage.camkes>;
 //------------------------------------------------------------------------------
 
 
+// GPIO base address: can be seen in the BCM2835 TRM or in arch/arm/boot/dts/bcm283x.dtsi
 // NOTE: VideoCore has this at 0x7E200000
 #define RPi_SPI_SD_HW_BCM2837_DATAPORT_PADDR     0x3F200000
 #define RPi_SPI_SD_HW_BCM2837_DATAPORT_SIZE      0x8000

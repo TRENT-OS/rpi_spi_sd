@@ -1,7 +1,7 @@
 /* Copyright (C) 2020, HENSOLDT Cyber GmbH */
 /**
  * @file
- * @brief   SPI LED driver.
+ * @brief   SPI SD driver.
  */
 #include "OS_Error.h"
 #include "LibDebug/Debug.h"
@@ -10,7 +10,6 @@
 
 #include "bcm2837_spi.h"
 #include "SDFileSystem.h"
-//#include "SPI_MSD_Driver.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -29,7 +28,7 @@
 #define SPISD_ERR_HW_BUSY          (_SPISD_ERR_BASE - 3)
 #define SPISD_ERR_BUSY             (_SPISD_ERR_BASE - 4)
 #define SPISD_ERR_ERASE_UNALIGNED  (_SPISD_ERR_BASE - 5)
-#define SPISD_ERR_BAD_CONFIG       (_SPISD_ERR_BASE - 6)i
+#define SPISD_ERR_BAD_CONFIG       (_SPISD_ERR_BASE - 6)
 
 /**
  * @brief organizational data for spi led driver.
@@ -58,7 +57,8 @@ isValidMSDArea(
     off_t const size)
 {
     off_t const end = offset + size;
-    return ( (offset >= 0) && (size >= 0) && (end >= offset) && (end <= disk_capacity(&(ctx.spi_sd_ctx))) );
+    return ( (offset >= 0) && (size >= 0) && (end >= offset) && 
+             (end <= disk_capacity(&(ctx.spi_sd_ctx))) );
 }
 
 static 
@@ -96,7 +96,7 @@ impl_spi_wait(
 
 void post_init(void)
 {
-    Debug_LOG_INFO("BCM2837_SPI_MSD init");
+    Debug_LOG_DEBUG("[%s] %s", get_instance_name(), __func__);
 
     // initialize BCM2837 SPI library
     if (!bcm2837_spi_begin(regBase))
@@ -149,7 +149,7 @@ void post_init(void)
 
     ctx.init_ok = true;
 
-    Debug_LOG_INFO("BCM2837_SPI_MSD done");
+    Debug_LOG_INFO("%s done",__func__);
 }
 
 
@@ -210,15 +210,18 @@ storage_rpc_write(
         //read first block, adjust according bytes and write block back
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, " 
+                             "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                 offset, offset, bytesWritten, bytesWritten, ret);
             return OS_ERROR_GENERIC;
         }
-        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? size : (disk_block_size() - (offset - sector * disk_block_size()));
+        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? 
+                                      size : (disk_block_size() - (offset - sector * disk_block_size()));
         memcpy(block + (offset - sector * disk_block_size()),buffer,nbr_of_bytes);
         ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, "
+                             "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                 offset, offset, bytesWritten, bytesWritten, ret);
             return OS_ERROR_GENERIC;
         }
@@ -233,7 +236,8 @@ storage_rpc_write(
             memcpy(block,buffer,disk_block_size());
             ret = disk_write(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesWritten, bytesWritten, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -247,14 +251,16 @@ storage_rpc_write(
             //read last block, adjust according bytes and write block back
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesWritten, bytesWritten, ret);
                 return OS_ERROR_GENERIC;
             }
             memcpy(block,buffer,size);
             ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_write() failed => SPISD_write() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesWritten, bytesWritten, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -327,11 +333,13 @@ storage_rpc_read(
         //read first block and copy according bytes to dataport
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, "
+                             "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                 offset, offset, bytesRead, bytesRead, ret);
             return OS_ERROR_GENERIC;
         }
-        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? size : (disk_block_size() - (offset - sector * disk_block_size()));
+        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? 
+                                      size : (disk_block_size() - (offset - sector * disk_block_size()));
         memcpy(OS_Dataport_getBuf(ctx.port_storage),block + (offset - sector * disk_block_size()),nbr_of_bytes);
    
         bytesRead += nbr_of_bytes;
@@ -342,7 +350,8 @@ storage_rpc_read(
         {
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesRead, bytesRead, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -356,7 +365,8 @@ storage_rpc_read(
             //read last block and copy according bytes into the dataport
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_read() failed => SPISD_read() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesRead, bytesRead, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -427,15 +437,18 @@ storage_rpc_erase(
         //read first block, adjust according bytes and erase block
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_read() failed => SPISD_erase() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_read() failed => SPISD_erase() failed, "
+                             "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                 offset, offset, bytesErased, bytesErased, ret);
             return OS_ERROR_GENERIC;
         }
-        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? size : (disk_block_size() - (offset - sector * disk_block_size()));
+        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? 
+                                      size : (disk_block_size() - (offset - sector * disk_block_size()));
         memset(block + (offset - sector * disk_block_size()),0xFF,nbr_of_bytes);
         ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_write() failed => SPISD_erase() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+            Debug_LOG_ERROR( "disk_write() failed => SPISD_erase() failed, "
+                             "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                 offset, offset, bytesErased, bytesErased, ret);
             return OS_ERROR_GENERIC;
         }
@@ -449,7 +462,8 @@ storage_rpc_erase(
             memset(block,0xFF,disk_block_size());
             ret = disk_write(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_write() failed => SPISD_erase() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_write() failed => SPISD_erase() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesErased, bytesErased, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -462,14 +476,16 @@ storage_rpc_erase(
             //read last block, adjust according bytes and erase block
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_read() failed => SPISD_erase() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_read() failed => SPISD_erase() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesErased, bytesErased, ret);
                 return OS_ERROR_GENERIC;
             }
             memset(block,0xFF,size);
             ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
             if (ret != 0){
-                Debug_LOG_ERROR( "disk_write() failed => SPISD_erase() failed, offset %jd (0x%jx), size %zu (0x%zx), code %d",
+                Debug_LOG_ERROR( "disk_write() failed => SPISD_erase() failed, "
+                                 "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                  offset, offset, bytesErased, bytesErased, ret);
                 return OS_ERROR_GENERIC;
             }
@@ -537,7 +553,7 @@ storage_rpc_getBlockSize(
         return OS_ERROR_INVALID_STATE;
     }
 
-    *blockSize = (size_t) disk_block_size();
+    *blockSize = (size_t)disk_block_size();
 
     return OS_SUCCESS;
 }

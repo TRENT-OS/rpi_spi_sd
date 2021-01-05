@@ -212,7 +212,7 @@ int disk_initialize(spisd_t* spi, const spisd_hal_t* hal, const spisd_config_t* 
     return 0;
 }
 
-int disk_write(spisd_t* spi, const uint8_t* buffer, off_t block_number, off_t count) {
+int disk_write(spisd_t* spi, const void* buffer, off_t block_number, off_t count) {
     if (!_is_initialized) {
         return -1;
     }
@@ -231,7 +231,7 @@ int disk_write(spisd_t* spi, const uint8_t* buffer, off_t block_number, off_t co
     return 0;
 }
 
-int disk_read(spisd_t* spi, uint8_t* buffer, off_t block_number, off_t count) {
+int disk_read(spisd_t* spi, void* buffer, off_t block_number, off_t count) {
     if (!_is_initialized) {
         return -1;
     }
@@ -369,7 +369,8 @@ int _cmd8(spisd_t* spi) {
     return -1; // timeout
 }
 
-int _read(spisd_t* spi, uint8_t *buffer, off_t length) {
+int _read(spisd_t* spi, void *buffer, off_t length) {
+    uint8_t * buf = (uint8_t *) buffer;
     spi->hal->_spi_cs(spi,1);
 
     // read until start byte (0xFF)
@@ -377,7 +378,7 @@ int _read(spisd_t* spi, uint8_t *buffer, off_t length) {
 
     // read data
     for (uint32_t i = 0; i < length; i++) {
-        buffer[i] = _spi_read_write(spi,0xFF);
+        buf[i] = _spi_read_write(spi,0xFF);
     }
     _spi_read_write(spi,0xFF); // checksum
     _spi_read_write(spi,0xFF);
@@ -387,7 +388,8 @@ int _read(spisd_t* spi, uint8_t *buffer, off_t length) {
     return 0;
 }
 
-int _write(spisd_t* spi, const uint8_t* buffer, off_t length) {
+int _write(spisd_t* spi, const void* buffer, off_t length) {
+    uint8_t * buf = (uint8_t *) buffer;
     spi->hal->_spi_cs(spi,1);
 
     // indicate start of block
@@ -395,7 +397,7 @@ int _write(spisd_t* spi, const uint8_t* buffer, off_t length) {
 
     // write the data
     for (uint32_t i = 0; i < length; i++) {
-        _spi_read_write(spi,buffer[i]);
+        _spi_read_write(spi,buf[i]);
     }
 
     // write the checksum
