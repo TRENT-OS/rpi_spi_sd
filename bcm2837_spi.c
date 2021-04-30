@@ -5,7 +5,7 @@
  */
 
 #include "bcm2837_spi.h"
-#include "bcm2837_gpio.h"
+// #include "bcm2837_gpio.h"
 
 #include <utils/arith.h>
 #include <stdio.h>
@@ -18,8 +18,6 @@
 
 
 static volatile uint32_t* bcm2837_spi0  = NULL;
-static volatile uint32_t* bcm2837_aux   = NULL;
-static volatile uint32_t* bcm2837_spi1  = NULL;
 
 /* SPI bit order. BCM2837 SPI0 only supports MSBFIRST, so we instead
  * have a software based bit reversal, based on a contribution by Damiano Benedetti
@@ -76,21 +74,78 @@ static uint8_t bcm2837_correct_order(uint8_t b)
     }
 }
 
+#include <platsupport/gpio.h>
+#include <platsupport/plat/gpio.h>
+
+/*! Base Address of the GPIO registers */
+#define BCM2837_GPIO_BASE               0x200000
+/*! Base Address of the SPI0 registers */
+#define BCM2837_SPI0_BASE               0x204000
+
+gpio_sys_t          gpio_sys;
+gpio_t              gpio;
+
+uint32_t bcm2837_peri_read(volatile uint32_t* paddr)
+{
+    uint32_t ret;
+    __sync_synchronize();
+    ret = *paddr;
+    __sync_synchronize();
+    return ret;
+}
+
+uint32_t bcm2837_peri_read_nb(volatile uint32_t* paddr)
+{
+    return *paddr;
+}
+
+void bcm2837_peri_write(volatile uint32_t* paddr, uint32_t value)
+{
+    __sync_synchronize();
+    *paddr = value;
+    __sync_synchronize();
+}
+
+void bcm2837_peri_write_nb(volatile uint32_t* paddr, uint32_t value)
+{
+    *paddr = value;
+}
+
+void bcm2837_peri_set_bits(volatile uint32_t* paddr, uint32_t value,
+                           uint32_t mask)
+{
+    uint32_t v = bcm2837_peri_read(paddr);
+    v = (v & ~mask) | (value & mask);
+    bcm2837_peri_write(paddr, v);
+}
+
 /*--------------SPI INTERFACE------------------------------*/
 
-int bcm2837_spi_begin(void* vaddr)
+int bcm2837_spi_begin(void* vaddr, ps_io_ops_t *io_ops)
 {
     volatile uint32_t* paddr;
 
-    bcm2837_gpio_init(vaddr);
+    int ret = gpio_sys_init(io_ops,&gpio_sys);
+    if (ret)
+    {
+        printf("gpio_sys_init() failed: rslt = %i", ret);
+        return -1;
+    }
+    // bcm2837_gpio_init(vaddr);
     bcm2837_spi0 = (uint32_t*)(vaddr + (BCM2837_SPI0_BASE - BCM2837_GPIO_BASE));
 
     /* Set the SPI0 pins to the Alt 0 function to enable SPI0 access on them */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_26, BCM2837_GPIO_FSEL_ALT0); /* CE1 */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_24, BCM2837_GPIO_FSEL_ALT0); /* CE0 */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_21, BCM2837_GPIO_FSEL_ALT0); /* MISO */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_19, BCM2837_GPIO_FSEL_ALT0); /* MOSI */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_23, BCM2837_GPIO_FSEL_ALT0); /* CLK */
+    for (size_t i = 0; i < 5; i++)
+    {
+        gpio_sys.init(&gpio_sys, 7 + i, 0, &gpio);
+        bcm2837_gpio_fsel(&gpio, BCM2837_GPIO_FSEL_ALT0);
+    }
+
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_26, BCM2837_GPIO_FSEL_ALT0); /* CE1 */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_24, BCM2837_GPIO_FSEL_ALT0); /* CE0 */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_21, BCM2837_GPIO_FSEL_ALT0); /* MISO */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_19, BCM2837_GPIO_FSEL_ALT0); /* MOSI */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_23, BCM2837_GPIO_FSEL_ALT0); /* CLK */
 
     /* Set the SPI CS register to the some sensible defaults */
     paddr = bcm2837_spi0 + BCM2837_SPI0_CS / 4;
@@ -104,12 +159,17 @@ int bcm2837_spi_begin(void* vaddr)
 
 void bcm2837_spi_end(void)
 {
-    /* Set all the SPI0 pins back to input */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_26, BCM2837_GPIO_FSEL_INPT); /* CE1 */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_24, BCM2837_GPIO_FSEL_INPT); /* CE0 */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_21, BCM2837_GPIO_FSEL_INPT); /* MISO */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_19, BCM2837_GPIO_FSEL_INPT); /* MOSI */
-    bcm2837_gpio_fsel(RPI_GPIO_P1_23, BCM2837_GPIO_FSEL_INPT); /* CLK */
+    for (size_t i = 0; i < 5; i++)
+    {
+        gpio_sys.init(&gpio_sys, 7 + i, 0, &gpio);
+        bcm2837_gpio_fsel(&gpio, BCM2837_GPIO_FSEL_INPT);
+    }
+    // /* Set all the SPI0 pins back to input */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_26, BCM2837_GPIO_FSEL_INPT); /* CE1 */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_24, BCM2837_GPIO_FSEL_INPT); /* CE0 */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_21, BCM2837_GPIO_FSEL_INPT); /* MISO */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_19, BCM2837_GPIO_FSEL_INPT); /* MOSI */
+    // bcm2837_gpio_fsel(RPI_GPIO_P1_23, BCM2837_GPIO_FSEL_INPT); /* CLK */
 }
 
 void bcm2837_spi_setBitOrder(uint8_t order)
@@ -316,263 +376,4 @@ void bcm2837_spi_write(uint16_t data)
 
     /* Set TA = 0, and also set the barrier */
     bcm2837_peri_set_bits(paddr, 0, BCM2837_SPI0_CS_TA);
-}
-
-int bcm2837_aux_spi_begin(void)
-{
-    volatile uint32_t* enable = bcm2837_aux + BCM2837_AUX_ENABLE / 4;
-    volatile uint32_t* cntl0 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL0 / 4;
-    volatile uint32_t* cntl1 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL1 / 4;
-
-    if (NULL == bcm2837_spi1)
-    {
-        return 0;    /* bcm2837_init() failed, or not root */
-    }
-
-    /* Set the SPI pins to the Alt 4 function to enable SPI1 access on them */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_36, BCM2837_GPIO_FSEL_ALT4);   /* SPI1_CE2_N */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_35, BCM2837_GPIO_FSEL_ALT4);   /* SPI1_MISO */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_38, BCM2837_GPIO_FSEL_ALT4);   /* SPI1_MOSI */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_40, BCM2837_GPIO_FSEL_ALT4);   /* SPI1_SCLK */
-
-    bcm2837_aux_spi_setClockDivider(bcm2837_aux_spi_CalcClockDivider(
-                                        1000000));  // Default 1MHz SPI
-
-    bcm2837_peri_write(enable, BCM2837_AUX_ENABLE_SPI0);
-    bcm2837_peri_write(cntl1, 0);
-    bcm2837_peri_write(cntl0, BCM2837_AUX_SPI_CNTL0_CLEARFIFO);
-
-    return 1; /* OK */
-}
-
-void bcm2837_aux_spi_end(void)
-{
-    /* Set all the SPI1 pins back to input */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_36, BCM2837_GPIO_FSEL_INPT);   /* SPI1_CE2_N */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_35, BCM2837_GPIO_FSEL_INPT);   /* SPI1_MISO */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_38, BCM2837_GPIO_FSEL_INPT);   /* SPI1_MOSI */
-    bcm2837_gpio_fsel(RPI_V2_GPIO_P1_40, BCM2837_GPIO_FSEL_INPT);   /* SPI1_SCLK */
-}
-
-uint16_t bcm2837_aux_spi_CalcClockDivider(uint32_t speed_hz)
-{
-    uint16_t divider;
-
-    if (speed_hz < (uint32_t) BCM2837_AUX_SPI_CLOCK_MIN)
-    {
-        speed_hz = (uint32_t) BCM2837_AUX_SPI_CLOCK_MIN;
-    }
-    else if (speed_hz > (uint32_t) BCM2837_AUX_SPI_CLOCK_MAX)
-    {
-        speed_hz = (uint32_t) BCM2837_AUX_SPI_CLOCK_MAX;
-    }
-
-    divider = (uint16_t) DIV_ROUND_UP(BCM2837_CORE_CLK_HZ, 2 * speed_hz) - 1;
-
-    if (divider > (uint16_t) BCM2837_AUX_SPI_CNTL0_SPEED_MAX)
-    {
-        return (uint16_t) BCM2837_AUX_SPI_CNTL0_SPEED_MAX;
-    }
-
-    return divider;
-}
-
-static uint32_t spi1_speed;
-
-void bcm2837_aux_spi_setClockDivider(uint16_t divider)
-{
-    spi1_speed = (uint32_t) divider;
-}
-
-void bcm2837_aux_spi_write(uint16_t data)
-{
-    volatile uint32_t* cntl0 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL0 / 4;
-    volatile uint32_t* cntl1 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL1 / 4;
-    volatile uint32_t* stat = bcm2837_spi1 + BCM2837_AUX_SPI_STAT / 4;
-    volatile uint32_t* io = bcm2837_spi1 + BCM2837_AUX_SPI_IO / 4;
-
-    uint32_t _cntl0 = (spi1_speed << BCM2837_AUX_SPI_CNTL0_SPEED_SHIFT);
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_CS2_N;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_ENABLE;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_MSBF_OUT;
-    _cntl0 |= 16; // Shift length
-
-    bcm2837_peri_write(cntl0, _cntl0);
-    bcm2837_peri_write(cntl1, BCM2837_AUX_SPI_CNTL1_MSBF_IN);
-
-    while (bcm2837_peri_read(stat) & BCM2837_AUX_SPI_STAT_TX_FULL)
-        ;
-
-    bcm2837_peri_write(io, (uint32_t) data << 16);
-}
-
-void bcm2837_aux_spi_writenb(const char* tbuf, uint32_t len)
-{
-    volatile uint32_t* cntl0 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL0 / 4;
-    volatile uint32_t* cntl1 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL1 / 4;
-    volatile uint32_t* stat = bcm2837_spi1 + BCM2837_AUX_SPI_STAT / 4;
-    volatile uint32_t* txhold = bcm2837_spi1 + BCM2837_AUX_SPI_TXHOLD / 4;
-    volatile uint32_t* io = bcm2837_spi1 + BCM2837_AUX_SPI_IO / 4;
-
-    char* tx = (char*) tbuf;
-    uint32_t tx_len = len;
-    uint32_t count;
-    uint32_t data;
-    uint32_t i;
-    uint8_t byte;
-
-    uint32_t _cntl0 = (spi1_speed << BCM2837_AUX_SPI_CNTL0_SPEED_SHIFT);
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_CS2_N;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_ENABLE;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_MSBF_OUT;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_VAR_WIDTH;
-
-    bcm2837_peri_write(cntl0, _cntl0);
-    bcm2837_peri_write(cntl1, BCM2837_AUX_SPI_CNTL1_MSBF_IN);
-
-    while (tx_len > 0)
-    {
-
-        while (bcm2837_peri_read(stat) & BCM2837_AUX_SPI_STAT_TX_FULL)
-            ;
-
-        count = MIN(tx_len, 3);
-        data = 0;
-
-        for (i = 0; i < count; i++)
-        {
-            byte = (tx != NULL) ? (uint8_t) * tx++ : (uint8_t) 0;
-            data |= byte << (8 * (2 - i));
-        }
-
-        data |= (count * 8) << 24;
-        tx_len -= count;
-
-        if (tx_len != 0)
-        {
-            bcm2837_peri_write(txhold, data);
-        }
-        else
-        {
-            bcm2837_peri_write(io, data);
-        }
-
-        while (bcm2837_peri_read(stat) & BCM2837_AUX_SPI_STAT_BUSY)
-            ;
-
-        (void) bcm2837_peri_read(io);
-    }
-}
-
-void bcm2837_aux_spi_transfernb(const char* tbuf, char* rbuf, uint32_t len)
-{
-    volatile uint32_t* cntl0 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL0 / 4;
-    volatile uint32_t* cntl1 = bcm2837_spi1 + BCM2837_AUX_SPI_CNTL1 / 4;
-    volatile uint32_t* stat = bcm2837_spi1 + BCM2837_AUX_SPI_STAT / 4;
-    volatile uint32_t* txhold = bcm2837_spi1 + BCM2837_AUX_SPI_TXHOLD / 4;
-    volatile uint32_t* io = bcm2837_spi1 + BCM2837_AUX_SPI_IO / 4;
-
-    char* tx = (char*)tbuf;
-    char* rx = (char*)rbuf;
-    uint32_t tx_len = len;
-    uint32_t rx_len = len;
-    uint32_t count;
-    uint32_t data;
-    uint32_t i;
-    uint8_t byte;
-
-    uint32_t _cntl0 = (spi1_speed << BCM2837_AUX_SPI_CNTL0_SPEED_SHIFT);
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_CS2_N;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_ENABLE;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_MSBF_OUT;
-    _cntl0 |= BCM2837_AUX_SPI_CNTL0_VAR_WIDTH;
-
-    bcm2837_peri_write(cntl0, _cntl0);
-    bcm2837_peri_write(cntl1, BCM2837_AUX_SPI_CNTL1_MSBF_IN);
-
-    while ((tx_len > 0) || (rx_len > 0))
-    {
-
-        while (!(bcm2837_peri_read(stat) & BCM2837_AUX_SPI_STAT_TX_FULL)
-               && (tx_len > 0))
-        {
-            count = MIN(tx_len, 3);
-            data = 0;
-
-            for (i = 0; i < count; i++)
-            {
-                byte = (tx != NULL) ? (uint8_t) * tx++ : (uint8_t) 0;
-                data |= byte << (8 * (2 - i));
-            }
-
-            data |= (count * 8) << 24;
-            tx_len -= count;
-
-            if (tx_len != 0)
-            {
-                bcm2837_peri_write(txhold, data);
-            }
-            else
-            {
-                bcm2837_peri_write(io, data);
-            }
-
-        }
-
-        while (!(bcm2837_peri_read(stat) & BCM2837_AUX_SPI_STAT_RX_EMPTY)
-               && (rx_len > 0))
-        {
-            count = MIN(rx_len, 3);
-            data = bcm2837_peri_read(io);
-
-            if (rbuf != NULL)
-            {
-                switch (count)
-                {
-                case 3:
-                    *rx++ = (char)((data >> 16) & 0xFF);
-                /*@fallthrough@*/
-                /* no break */
-                case 2:
-                    *rx++ = (char)((data >> 8) & 0xFF);
-                /*@fallthrough@*/
-                /* no break */
-                case 1:
-                    *rx++ = (char)((data >> 0) & 0xFF);
-                }
-            }
-
-            rx_len -= count;
-        }
-
-        while (!(bcm2837_peri_read(stat) & BCM2837_AUX_SPI_STAT_BUSY) && (rx_len > 0))
-        {
-            count = MIN(rx_len, 3);
-            data = bcm2837_peri_read(io);
-
-            if (rbuf != NULL)
-            {
-                switch (count)
-                {
-                case 3:
-                    *rx++ = (char)((data >> 16) & 0xFF);
-                /*@fallthrough@*/
-                /* no break */
-                case 2:
-                    *rx++ = (char)((data >> 8) & 0xFF);
-                /*@fallthrough@*/
-                /* no break */
-                case 1:
-                    *rx++ = (char)((data >> 0) & 0xFF);
-                }
-            }
-
-            rx_len -= count;
-        }
-    }
-}
-
-void bcm2837_aux_spi_transfern(char* buf, uint32_t len)
-{
-    bcm2837_aux_spi_transfernb(buf, buf, len);
 }

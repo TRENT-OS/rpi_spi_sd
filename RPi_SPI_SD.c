@@ -4,7 +4,7 @@
  * @brief   SPI SD driver.
  */
 #include "OS_Error.h"
-#include "LibDebug/Debug.h"
+#include "lib_debug/Debug.h"
 #include "OS_Dataport.h"
 #include "TimeServer.h"
 
@@ -57,11 +57,11 @@ isValidMSDArea(
     off_t const size)
 {
     off_t const end = offset + size;
-    return ( (offset >= 0) && (size >= 0) && (end >= offset) && 
+    return ( (offset >= 0) && (size >= 0) && (end >= offset) &&
              (end <= disk_capacity(&(ctx.spi_sd_ctx))) );
 }
 
-static 
+static
 __attribute__((__nonnull__))
 uint8_t
 impl_spi_transfer(
@@ -94,12 +94,21 @@ impl_spi_wait(
     TimeServer_sleep(&timer, TimeServer_PRECISION_MSEC, ms);
 }
 
+#include <camkes/io.h>
+ps_io_ops_t io_ops;
 void post_init(void)
 {
     Debug_LOG_DEBUG("[%s] %s", get_instance_name(), __func__);
 
+    int rslt = camkes_io_ops(&io_ops);
+    if (0 != rslt)
+    {
+        Debug_LOG_ERROR("camkes_io_ops() failed: rslt = %i", rslt);
+        return;
+    }
+
     // initialize BCM2837 SPI library
-    if (!bcm2837_spi_begin(regBase))
+    if (!bcm2837_spi_begin(regBase, &io_ops))
     {
         Debug_LOG_ERROR("bcm2837_spi_begin() failed");
         return;
@@ -115,7 +124,7 @@ void post_init(void)
         // initial clock speed must be between 100 and 400 kHz for SD card initialization
         // 250MHz / 2048 = 122.0703125 kHz
         .init_sck = BCM2837_SPI_CLOCK_DIVIDER_2048,
-        // Note: The highest SPI clock rate is 20 MHz for MMC and 25 MHz for SD 
+        // Note: The highest SPI clock rate is 20 MHz for MMC and 25 MHz for SD
         // 250MHz / 16 = 15.625 MHz
         .transfer_sck = BCM2837_SPI_CLOCK_DIVIDER_16,
         // Standard capacity cards have variable data block sizes, whereas High
@@ -125,15 +134,15 @@ void post_init(void)
         //.block_size = 512
     };
 
-    // set initialization clock speed before SD card initialization    
-    bcm2837_spi_setClockDivider(spisd_config.init_sck); 
+    // set initialization clock speed before SD card initialization
+    bcm2837_spi_setClockDivider(spisd_config.init_sck);
 
     // initialize MSD_SPI library
     static const spisd_hal_t hal =
     {
         ._spi_transfer = impl_spi_transfer,
         ._spi_cs    = impl_spi_cs,
-        ._spi_wait  = impl_spi_wait  
+        ._spi_wait  = impl_spi_wait
     };
 
     disk_initialize(&ctx.spi_sd_ctx, &hal, &spisd_config);
@@ -144,8 +153,8 @@ void post_init(void)
         return;
     }
 
-    // set transfer clock speed after SD card initialization 
-    bcm2837_spi_setClockDivider(spisd_config.transfer_sck); 
+    // set transfer clock speed after SD card initialization
+    bcm2837_spi_setClockDivider(spisd_config.transfer_sck);
 
     ctx.init_ok = true;
 
@@ -210,12 +219,12 @@ storage_rpc_write(
         //read first block, adjust according bytes and write block back
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
-            Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, " 
+            Debug_LOG_ERROR( "disk_read() failed => SPISD_write() failed, "
                              "offset %jd (0x%jx), size %zu (0x%zx), code %d",
                                 offset, offset, bytesWritten, bytesWritten, ret);
             return OS_ERROR_GENERIC;
         }
-        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? 
+        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ?
                                       size : (disk_block_size() - (offset - sector * disk_block_size()));
         memcpy(block + (offset - sector * disk_block_size()),buffer,nbr_of_bytes);
         ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
@@ -327,9 +336,9 @@ storage_rpc_read(
     {
         uint8_t block[disk_block_size()];
         memset(block,0,disk_block_size());
-        
+
         uint32_t sector = offset / disk_block_size();
-        
+
         //read first block and copy according bytes to dataport
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
         if (ret != 0){
@@ -338,14 +347,14 @@ storage_rpc_read(
                                 offset, offset, bytesRead, bytesRead, ret);
             return OS_ERROR_GENERIC;
         }
-        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? 
+        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ?
                                       size : (disk_block_size() - (offset - sector * disk_block_size()));
         memcpy(OS_Dataport_getBuf(ctx.port_storage),block + (offset - sector * disk_block_size()),nbr_of_bytes);
-   
+
         bytesRead += nbr_of_bytes;
         size -= nbr_of_bytes;
-    
-        //read the remaining blocks and copy into dataport 
+
+        //read the remaining blocks and copy into dataport
         while (size > disk_block_size())
         {
             ret = disk_read(&(ctx.spi_sd_ctx),block,++sector,1);
@@ -375,7 +384,7 @@ storage_rpc_read(
             size -= size;
         }
     }
-    
+
     *read = bytesRead;
 
     return OS_SUCCESS;
@@ -404,7 +413,7 @@ storage_rpc_erase(
         Debug_LOG_ERROR("initialization failed, fail call %s()", __func__);
         return OS_ERROR_INVALID_STATE;
     }
-    
+
     size_t dataport_size = OS_Dataport_getSize(ctx.port_storage);
     if (size > dataport_size)
     {
@@ -432,7 +441,7 @@ storage_rpc_erase(
     if(size > 0){
         uint8_t block[disk_block_size()];
         memset(block,0,disk_block_size());
-        
+
         uint32_t sector = offset / disk_block_size();
         //read first block, adjust according bytes and erase block
         ret = disk_read(&(ctx.spi_sd_ctx),block,sector,1);
@@ -442,7 +451,7 @@ storage_rpc_erase(
                                 offset, offset, bytesErased, bytesErased, ret);
             return OS_ERROR_GENERIC;
         }
-        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ? 
+        size_t nbr_of_bytes = size <= (disk_block_size() - (offset - sector * disk_block_size())) ?
                                       size : (disk_block_size() - (offset - sector * disk_block_size()));
         memset(block + (offset - sector * disk_block_size()),0xFF,nbr_of_bytes);
         ret = disk_write(&(ctx.spi_sd_ctx),block,sector,1);
@@ -452,10 +461,10 @@ storage_rpc_erase(
                                 offset, offset, bytesErased, bytesErased, ret);
             return OS_ERROR_GENERIC;
         }
-        
+
         bytesErased += nbr_of_bytes;
         size -= nbr_of_bytes;
-        
+
         //erase the remaining blocks
         while (size > disk_block_size())
         {
@@ -493,7 +502,7 @@ storage_rpc_erase(
             size -= size;
         }
     }
-    
+
     *erased = bytesErased;
 
     return OS_SUCCESS;

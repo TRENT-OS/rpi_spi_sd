@@ -7,6 +7,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <camkes/io.h>
 
 /* Defines for SPI
    GPIO register offsets from BCM2837_SPI0_BASE.
@@ -124,7 +125,7 @@ typedef enum
       \sa  bcm2837_spi_end()
       \return 1 if successful, 0 otherwise (perhaps because you are not running as root)
     */
-extern int bcm2837_spi_begin(void* vaddr);
+extern int bcm2837_spi_begin(void* vaddr, ps_io_ops_t *io_ops);
 
 /*! End SPI operations.
       SPI0 pins P1-19 (MOSI), P1-21 (MISO), P1-23 (CLK), P1-24 (CE0) and P1-26 (CE1)

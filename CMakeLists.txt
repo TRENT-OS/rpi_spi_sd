@@ -33,7 +33,6 @@ function(RPi_SPI_SD_DeclareCAmkESComponent name)
         ${name}
         SOURCES
             ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/RPi_SPI_SD.c
-            ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/bcm2837_gpio.c
             ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/bcm2837_spi.c
             ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/SDFileSystem.c
         C_FLAGS
@@ -41,7 +40,7 @@ function(RPi_SPI_SD_DeclareCAmkESComponent name)
             -Werror
         LIBS
             os_core_api
-            os_libs
+            lib_debug
             ${RPi_SPI_SD_LIBS}
     )
 
